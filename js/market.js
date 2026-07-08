@@ -207,7 +207,6 @@ export function getChart(stock, range){
   const safeNow = Math.max(now, lb);
 
   const cfgMap = {
-    "5m": {points:2, step:1},
     "1h": {points:13, step:1},
     "1d": {points:289, step:1},
     "1w": {points:337, step:6}
@@ -225,7 +224,7 @@ export function getChart(stock, range){
     if(buckets[buckets.length-1] !== safeNow) buckets.push(safeNow);
     buckets = buckets.slice(-36);
   }else{
-    const cfg = cfgMap[range] || cfgMap["5m"];
+    const cfg = cfgMap[range] || cfgMap["1h"];
     for(let i=cfg.points-1;i>=0;i--){
       const b = Math.max(lb, safeNow - i * cfg.step);
       if(!buckets.includes(b)) buckets.push(b);
@@ -247,7 +246,6 @@ export function getChart(stock, range){
 function referenceBucketForRange(range, currentBucket){
   const lb = listingBucket();
   const offsetMap = {
-    "5m":1,
     "1h":12,
     "1d":288,
     "1w":2016
@@ -255,11 +253,11 @@ function referenceBucketForRange(range, currentBucket){
 
   if(range === "all") return lb;
 
-  const offset = offsetMap[range] || offsetMap["5m"];
+  const offset = offsetMap[range] || offsetMap["1h"];
   return Math.max(lb, currentBucket - offset);
 }
 
-export function getStockView(stock, range="5m"){
+export function getStockView(stock, range="1h"){
   const now = bucket(0);
   const price = getPriceAtBucket(stock, now);
   const referenceBucket = referenceBucketForRange(range, now);
@@ -269,7 +267,7 @@ export function getStockView(stock, range="5m"){
   return {...stock, price, prev, change, chart};
 }
 
-export function getAllStockViews(range="5m"){
+export function getAllStockViews(range="1h"){
   return STOCKS.map(s => getStockView(s, range));
 }
 

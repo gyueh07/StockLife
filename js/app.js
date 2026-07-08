@@ -17,7 +17,8 @@ import {
   limit,
   getDocs,
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -55,7 +56,7 @@ const state = {
   screen:"authScreen",
   filter:"all",
   currentStock:null,
-  chartRange:"5m",
+  chartRange:"1h",
   currentChartValues:[],
   tradeType:"buy",
   qty:1,
@@ -66,6 +67,8 @@ const state = {
 
 let tradeAlertTimer = null;
 let saveQueue = Promise.resolve();
+let rankUnsubscribe = null;
+let lastRankAssetSyncBucket = null;
 
 const titles = {
   homeScreen:"홈",
@@ -293,8 +296,16 @@ async function commitTrade(stock, tradeType, qty, price){
   return {tradeLabel, amount};
 }
 
+function stopRankRealtime(){
+  if(rankUnsubscribe){
+    rankUnsubscribe();
+    rankUnsubscribe = null;
+  }
+}
+
 function show(screen){
   state.screen = screen;
+  if(screen !== "rankScreen") stopRankRealtime();
   document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active", s.id === screen));
 
   const isApp = screen !== "authScreen";
@@ -662,10 +673,10 @@ function drawChart(pointsData){
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const range = Math.max(1, max - min);
-  const chartLeft = 8;
-  const chartRight = 332;
-  const chartTop = 12;
-  const chartBottom = 170;
+  const chartLeft = 22;
+  const chartRight = 318;
+  const chartTop = 20;
+  const chartBottom = 160;
   const chartWidth = chartRight - chartLeft;
   const chartHeight = chartBottom - chartTop;
 
@@ -904,6 +915,38 @@ async function renderRank(syncCurrentUser=true){
     }
 
     const q = query(collection(db, "users"), orderBy("totalAsset", "desc"), limit(20));
+    stopRankRealtime();
+    $("rankList").className = "empty";
+    $("rankList").innerHTML = "랭킹을 불러오는 중입니다.";
+    rankUnsubscribe = onSnapshot(q, (snap) => {
+      if(snap.empty){
+        $("rankList").className = "empty";
+        $("rankList").innerHTML = "아직 랭킹 데이터가 없습니다.";
+        return;
+      }
+
+      $("rankList").className = "";
+      let i = 0;
+      $("rankList").innerHTML = snap.docs.map(d=>{
+        i++;
+        const u = d.data();
+        return `
+          <div class="rank-row ${i===1 ? "top" : ""}">
+            <div class="rank-no">${i}</div>
+            <div>
+              <b>${u.nickname || "사용자"}</b>
+              <p>${won(u.totalAsset || 0)}</p>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }, (e) => {
+      console.error(e);
+      $("rankList").className = "empty";
+      $("rankList").innerHTML = "랭킹을 불러오지 못했습니다.";
+    });
+    return;
+
     const snap = await getDocs(q);
     if(snap.empty){
       $("rankList").className = "empty";
@@ -961,6 +1004,13 @@ $("refreshBtn").onclick = async () => {
 
 setInterval(()=>{
   $("tickTimer").textContent = getNextTickText();
+  if(state.screen === "rankScreen" && state.uid){
+    const rankAssetSyncBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+    if(lastRankAssetSyncBucket !== rankAssetSyncBucket){
+      lastRankAssetSyncBucket = rankAssetSyncBucket;
+      save(false, false).catch(console.error);
+    }
+  }
   if(state.screen === "detailScreen" && state.currentStock){
     const id = state.currentStock.id;
     const base = STOCKS.find(x=>x.id===id);

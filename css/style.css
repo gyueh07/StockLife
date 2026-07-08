@@ -215,7 +215,7 @@ input::placeholder{color:#6b7280}
 }
 
 .back-btn{background:transparent;color:var(--muted);font-weight:900;margin-bottom:14px}
-.detail-card{overflow:hidden}
+.detail-card{overflow:visible}
 .detail-head{display:flex;justify-content:space-between;align-items:start}
 .detail-head span{font-size:13px;color:var(--muted);font-weight:900}
 .detail-head h2{font-size:26px;margin-top:4px}
@@ -227,7 +227,7 @@ input::placeholder{color:#6b7280}
 #detailChange{font-weight:900;margin-bottom:16px}
 .chart-wrap{
   position:relative;height:192px;border-radius:26px;background:rgba(0,0,0,.22);
-  border:1px solid var(--line);overflow:hidden;margin:10px 0 18px;
+  border:1px solid var(--line);overflow:visible;margin:10px 0 18px;
   touch-action:none;
 }
 .chart-lines{
@@ -236,7 +236,7 @@ input::placeholder{color:#6b7280}
     linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
   background-size:100% 33%,25% 100%;
 }
-.chart-wrap svg{position:absolute;inset:18px 12px 14px;width:calc(100% - 24px);height:calc(100% - 32px)}
+.chart-wrap svg{position:absolute;inset:18px;width:calc(100% - 36px);height:calc(100% - 36px)}
 #chartLine{fill:none;stroke:url(#lineGradient);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;transition:.22s}
 #chartFill{fill:rgba(155,92,255,.16);stroke:none;transition:.22s}
 .crosshair{position:absolute;inset:0;pointer-events:none}
