@@ -1,6 +1,7 @@
 {
-  "version": "v3.1 Name Login",
+  "version": "v3.2 Cache + Login Fix",
+  "css_cache_bust": true,
+  "js_cache_bust": true,
   "missing_html_ids_referenced_by_app": [],
-  "missing_import_files": [],
   "status": "OK"
 }

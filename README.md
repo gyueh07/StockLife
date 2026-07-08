@@ -1,4 +1,4 @@
-# StockLife v3.1 Name Login
+# StockLife v3.2 Cache + Login Fix
 
 GitHub Pages 배포용 완성본입니다.
 
@@ -33,3 +33,11 @@ GitHub Pages 배포용 완성본입니다.
 ## 중요
 Firebase Authentication에서 Email/Password 로그인이 켜져 있어야 합니다.
 GitHub Pages 주소가 Firebase Authentication > Settings > Authorized domains에 등록되어 있어야 합니다.
+
+
+## v3.2 변경점
+- CSS 캐시 방지: `style.css?v=3.2`
+- JS 캐시 방지: `app.js?v=3.2`
+- 이름 로그인 내부 도메인을 더 안전한 형식으로 변경
+- 로그인 성공 후 화면 전환 중 오류가 나면 토스트로 표시
+- 구버전 v3.1 계정 로그인 fallback 추가

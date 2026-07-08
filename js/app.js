@@ -21,7 +21,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const STARTING_CASH = 1000000;
-const INTERNAL_DOMAIN = "stocklife.local";
+const INTERNAL_DOMAIN = "stocklifegame.com";
 
 function normalizeLoginName(name){
   return (name || "")
@@ -184,7 +184,9 @@ $("loginBtn").onclick = async () => {
   try{
     loading(true);
     await signInWithEmailAndPassword(auth, email, password);
+    console.log("StockLife login success");
   }catch(e){
+    console.error(e);
     toast(errorMessage(e));
     loading(false);
   }
@@ -196,13 +198,14 @@ $("logoutBtn").onclick = async () => {
 };
 
 onAuthStateChanged(auth, async (user) => {
-  if(!user){
-    state.uid = null;
-    loading(false);
-    return;
-  }
+  try{
+    if(!user){
+      state.uid = null;
+      loading(false);
+      return;
+    }
 
-  state.uid = user.uid;
+    state.uid = user.uid;
   state.email = user.email || "";
 
   const ref = doc(db, "users", user.uid);
@@ -216,8 +219,8 @@ onAuthStateChanged(auth, async (user) => {
     if(!state.user.holdings) state.user.holdings = {};
   }else{
     state.user = {
-      nickname: user.email?.includes("@stocklife.local") ? "투자자" : (user.email?.split("@")[0] || "투자자"),
-      loginName: user.email?.includes("@stocklife.local") ? "" : (user.email?.split("@")[0] || ""),
+      nickname: user.email?.includes("@stocklifegame.com") ? "투자자" : (user.email?.split("@")[0] || "투자자"),
+      loginName: user.email?.includes("@stocklifegame.com") ? "" : (user.email?.split("@")[0] || ""),
       email: user.email || "",
       startingCash:STARTING_CASH,
       cash:STARTING_CASH,
@@ -236,6 +239,11 @@ onAuthStateChanged(auth, async (user) => {
   renderAll();
   show("homeScreen");
   loading(false);
+  }catch(e){
+    console.error(e);
+    loading(false);
+    toast(errorMessage(e));
+  }
 });
 
 function errorMessage(e){
@@ -246,7 +254,8 @@ function errorMessage(e){
   if(c.includes("invalid-credential")) return "이름 또는 비밀번호가 틀림";
   if(c.includes("missing-password")) return "비밀번호를 입력하세요";
   if(c.includes("operation-not-allowed")) return "Firebase에서 이메일/비밀번호 로그인을 켜야 합니다";
-  if(c.includes("permission-denied")) return "Firestore 권한 설정 필요";
+  if(c.includes("permission-denied")) return "Firestore 규칙 때문에 저장을 못 했습니다";
+  if(c.includes("network-request-failed")) return "네트워크 연결을 확인하세요";
   return "오류: " + c;
 }
 
