@@ -242,9 +242,25 @@ input::placeholder{color:#6b7280}
 .v-line,.h-line{position:absolute;background:rgba(255,255,255,.42)}
 .v-line{top:0;bottom:0;width:1px}
 .h-line{left:0;right:0;height:1px}
+.chart-dot{
+  position:absolute;
+  width:12px;
+  height:12px;
+  border-radius:999px;
+  background:white;
+  border:3px solid var(--cyan);
+  box-shadow:0 0 18px rgba(34,211,238,.8);
+  transform:translate(-50%,-50%);
+}
 .crosshair-tip{
-  position:absolute;transform:translate(8px,-110%);padding:7px 10px;border-radius:12px;
-  background:rgba(15,23,42,.92);border:1px solid var(--line);font-size:12px;font-weight:900;white-space:nowrap;
+  position:absolute;transform:translate(10px,-112%);padding:8px 10px;border-radius:12px;
+  background:rgba(15,23,42,.94);border:1px solid var(--line);font-size:12px;font-weight:900;white-space:nowrap;
+  line-height:1.4;
+}
+.crosshair-tip small{
+  display:block;
+  color:var(--muted);
+  font-weight:800;
 }
 
 .trade-buttons{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}

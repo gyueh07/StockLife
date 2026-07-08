@@ -1,7 +1,9 @@
 {
-  "version": "v3.2 Cache + Login Fix",
+  "version": "v3.4 Listing + Chart Fix",
+  "listing_time": "2026.07.09 12:00 KST",
   "css_cache_bust": true,
   "js_cache_bust": true,
+  "chart_dot_id_exists": true,
   "missing_html_ids_referenced_by_app": [],
   "status": "OK"
 }

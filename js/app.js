@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase.js";
-import { getAllStockViews, getStockView, getNextTickText } from "./market.js";
+import { getAllStockViews, getStockView, getNextTickText, LISTING_TEXT } from "./market.js";
 import { STOCKS } from "./data.js";
 import {
   createUserWithEmailAndPassword,
@@ -428,16 +428,22 @@ $("favoriteBtn").onclick = async () => {
   renderHome();
 };
 
-function drawChart(values){
-  state.currentChartValues = values;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+function drawChart(pointsData){
+  state.currentChartValues = pointsData;
+  const prices = pointsData.map(p => p.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
   const range = Math.max(1, max - min);
-  const points = values.map((v,i)=>{
-    const x = (i/(values.length-1))*340;
-    const y = 170 - ((v-min)/range)*140;
+
+  const points = pointsData.map((p,i)=>{
+    const denom = Math.max(1, pointsData.length - 1);
+    const x = (i / denom) * 340;
+    const y = 170 - ((p.price - min) / range) * 140;
+    p.chartX = x;
+    p.chartY = y;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
+
   $("chartLine").setAttribute("points", points);
   $("chartFill").setAttribute("points", `${points} 340,190 0,190`);
 }
@@ -445,18 +451,23 @@ function drawChart(values){
 const chartWrap = $("chartWrap");
 chartWrap.addEventListener("pointermove", (e)=>{
   if(!state.currentChartValues.length) return;
+
   const rect = chartWrap.getBoundingClientRect();
-  const x = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
-  const y = Math.min(Math.max(0, e.clientY - rect.top), rect.height);
-  const idx = Math.round((x / rect.width) * (state.currentChartValues.length - 1));
-  const value = state.currentChartValues[idx];
+  const rawX = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
+  const idx = Math.round((rawX / rect.width) * (state.currentChartValues.length - 1));
+  const point = state.currentChartValues[idx];
+
+  const x = (point.chartX / 340) * rect.width;
+  const y = (point.chartY / 190) * rect.height;
 
   $("crosshair").classList.remove("hidden");
   $("crosshair").querySelector(".v-line").style.left = `${x}px`;
   $("crosshair").querySelector(".h-line").style.top = `${y}px`;
+  $("chartDot").style.left = `${x}px`;
+  $("chartDot").style.top = `${y}px`;
   $("crosshairTip").style.left = `${x}px`;
   $("crosshairTip").style.top = `${y}px`;
-  $("crosshairTip").textContent = won(value);
+  $("crosshairTip").innerHTML = `${won(point.price)}<small>${point.label}</small>`;
 });
 chartWrap.addEventListener("pointerleave", ()=>$("crosshair").classList.add("hidden"));
 
