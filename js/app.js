@@ -662,18 +662,24 @@ function drawChart(pointsData){
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const range = Math.max(1, max - min);
+  const chartLeft = 8;
+  const chartRight = 332;
+  const chartTop = 12;
+  const chartBottom = 170;
+  const chartWidth = chartRight - chartLeft;
+  const chartHeight = chartBottom - chartTop;
 
   const points = pointsData.map((p,i)=>{
     const denom = Math.max(1, pointsData.length - 1);
-    const x = (i / denom) * 340;
-    const y = 170 - ((p.price - min) / range) * 140;
+    const x = chartLeft + (i / denom) * chartWidth;
+    const y = chartBottom - ((p.price - min) / range) * chartHeight;
     p.chartX = x;
     p.chartY = y;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
 
   $("chartLine").setAttribute("points", points);
-  $("chartFill").setAttribute("points", `${points} 340,190 0,190`);
+  $("chartFill").setAttribute("points", `${points} ${chartRight},190 ${chartLeft},190`);
 }
 
 const chartWrap = $("chartWrap");

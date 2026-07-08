@@ -113,11 +113,11 @@ function calculateNextPrice(stock, targetBucket, previousPrice){
 
   // 최대가 근처: 상승 약화 / 하락 강화
   // 최저가 근처: 하락 약화 / 상승 강화
-  const wallBias = -position * (0.0035 + stock.vol * 0.0008);
+  const wallBias = -position * (0.0045 + stock.vol * 0.0011);
 
   // 종목별 변동성만 다르게 적용
-  const noise = (random(hash(stock.id) + targetBucket * 139) - 0.5) * (0.02 * stock.vol);
-  const wave = Math.sin((targetBucket + hash(stock.name) % 977) / (8 + stock.vol)) * (0.002 * stock.vol);
+  const noise = (random(hash(stock.id) + targetBucket * 139) - 0.5) * (0.028 * stock.vol);
+  const wave = Math.sin((targetBucket + hash(stock.name) % 977) / (7 + stock.vol)) * (0.003 * stock.vol);
 
   let next = previousPrice * (1 + wallBias + noise + wave);
 
@@ -207,10 +207,10 @@ export function getChart(stock, range){
   const safeNow = Math.max(now, lb);
 
   const cfgMap = {
-    "5m": {points:12, step:1},
-    "1h": {points:12, step:12},
-    "1d": {points:24, step:288},
-    "1w": {points:28, step:504}
+    "5m": {points:2, step:1},
+    "1h": {points:13, step:1},
+    "1d": {points:289, step:1},
+    "1w": {points:337, step:6}
   };
 
   let buckets = [];
@@ -244,9 +244,26 @@ export function getChart(stock, range){
   });
 }
 
+function referenceBucketForRange(range, currentBucket){
+  const lb = listingBucket();
+  const offsetMap = {
+    "5m":1,
+    "1h":12,
+    "1d":288,
+    "1w":2016
+  };
+
+  if(range === "all") return lb;
+
+  const offset = offsetMap[range] || offsetMap["5m"];
+  return Math.max(lb, currentBucket - offset);
+}
+
 export function getStockView(stock, range="5m"){
-  const price = getPrice(stock, 0);
-  const prev = getPrice(stock, -1);
+  const now = bucket(0);
+  const price = getPriceAtBucket(stock, now);
+  const referenceBucket = referenceBucketForRange(range, now);
+  const prev = getPriceAtBucket(stock, referenceBucket);
   const change = prev === 0 ? 0 : ((price - prev) / prev) * 100;
   const chart = getChart(stock, range);
   return {...stock, price, prev, change, chart};
