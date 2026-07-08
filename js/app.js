@@ -24,22 +24,18 @@ const STARTING_CASH = 1000000;
 const INTERNAL_DOMAIN = "stocklifegame.com";
 
 function normalizeLoginName(name){
-  return (name || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[^a-z0-9가-힣ㄱ-ㅎㅏ-ㅣ_-]/g, "");
-}
-
-function encodeNameForEmail(name){
-  return encodeURIComponent(normalizeLoginName(name)).replace(/%/g, "x").toLowerCase();
+  return (name || "").trim();
 }
 
 function nameToInternalEmail(name){
   const clean = normalizeLoginName(name);
   if(!clean) return "";
-  if(clean.includes("@")) return clean;
-  return `${encodeNameForEmail(clean)}@${INTERNAL_DOMAIN}`;
+  const encoded = btoa(unescape(encodeURIComponent(clean)))
+    .replaceAll("+", "p")
+    .replaceAll("/", "s")
+    .replaceAll("=", "")
+    .toLowerCase();
+  return `user-${encoded}@${INTERNAL_DOMAIN}`;
 }
 
 const state = {
@@ -83,6 +79,13 @@ function toast(msg){
   $("toast").textContent = msg;
   $("toast").classList.add("show");
   setTimeout(()=>$("toast").classList.remove("show"), 1700);
+}
+
+function setAuthError(msg=""){
+  const el = $("authError");
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.toggle("hidden", !msg);
 }
 
 function loading(show){
@@ -136,11 +139,13 @@ $("showLogin").onclick = () => {
 };
 
 $("signupBtn").onclick = async () => {
+  setAuthError("");
   const loginName = $("signupName").value.trim();
   const password = $("signupPassword").value.trim();
   const email = nameToInternalEmail(loginName);
 
-  if(!loginName || !email || password.length < 6){
+  if(!loginName || password.length < 6){
+    setAuthError("이름과 비밀번호 6자 이상 입력");
     toast("이름과 비밀번호 6자 이상 입력");
     return;
   }
@@ -148,7 +153,10 @@ $("signupBtn").onclick = async () => {
   try{
     loading(true);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const data = {
+
+    state.uid = cred.user.uid;
+    state.email = email;
+    state.user = {
       nickname: loginName,
       loginName,
       email,
@@ -162,32 +170,81 @@ $("signupBtn").onclick = async () => {
       createdAt:new Date().toISOString(),
       updatedAt:serverTimestamp()
     };
-    await setDoc(doc(db, "users", cred.user.uid), data, { merge:true });
+
+    await setDoc(doc(db, "users", cred.user.uid), state.user, { merge:true });
+    renderAll();
+    show("homeScreen");
     toast("회원가입 완료");
   }catch(e){
-    toast(errorMessage(e));
+    console.error(e);
+    const msg = errorMessage(e);
+    setAuthError(msg);
+    toast(msg);
   }finally{
     loading(false);
   }
 };
 
 $("loginBtn").onclick = async () => {
+  setAuthError("");
   const loginName = $("loginName").value.trim();
   const password = $("loginPassword").value.trim();
   const email = nameToInternalEmail(loginName);
 
   if(!loginName || !password){
+    setAuthError("이름과 비밀번호를 입력하세요");
     toast("이름과 비밀번호 입력");
     return;
   }
 
   try{
     loading(true);
-    await signInWithEmailAndPassword(auth, email, password);
-    console.log("StockLife login success");
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+
+    state.uid = cred.user.uid;
+    state.email = email;
+
+    const ref = doc(db, "users", cred.user.uid);
+    const snap = await getDoc(ref);
+
+    if(snap.exists()){
+      state.user = {...state.user, ...snap.data()};
+    }else{
+      state.user = {
+        nickname: loginName,
+        loginName,
+        email,
+        startingCash:STARTING_CASH,
+        cash:STARTING_CASH,
+        holdings:{},
+        favorites:[],
+        tradeCount:0,
+        history:[],
+        totalAsset:STARTING_CASH,
+        createdAt:new Date().toISOString(),
+        updatedAt:serverTimestamp()
+      };
+      await setDoc(ref, state.user, { merge:true });
+    }
+
+    if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
+    if(!state.user.history) state.user.history = [];
+    if(!state.user.favorites) state.user.favorites = [];
+    if(!state.user.holdings) state.user.holdings = {};
+    if(!state.user.loginName) state.user.loginName = loginName;
+    if(!state.user.nickname || state.user.nickname === "투자자") state.user.nickname = loginName;
+
+    await setDoc(ref, {...state.user, totalAsset: totalAsset(), updatedAt: serverTimestamp()}, { merge:true });
+
+    renderAll();
+    show("homeScreen");
+    toast("로그인 완료");
   }catch(e){
     console.error(e);
-    toast(errorMessage(e));
+    const msg = errorMessage(e);
+    setAuthError(msg);
+    toast(msg);
+  }finally{
     loading(false);
   }
 };
@@ -198,73 +255,52 @@ $("logoutBtn").onclick = async () => {
 };
 
 onAuthStateChanged(auth, async (user) => {
-  try{
-    if(!user){
-      state.uid = null;
-      loading(false);
-      return;
-    }
-
-    state.uid = user.uid;
-  state.email = user.email || "";
-
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-
-  if(snap.exists()){
-    state.user = {...state.user, ...snap.data()};
-    if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
-    if(!state.user.history) state.user.history = [];
-    if(!state.user.favorites) state.user.favorites = [];
-    if(!state.user.holdings) state.user.holdings = {};
-  }else{
-    state.user = {
-      nickname: user.email?.includes("@stocklifegame.com") ? "투자자" : (user.email?.split("@")[0] || "투자자"),
-      loginName: user.email?.includes("@stocklifegame.com") ? "" : (user.email?.split("@")[0] || ""),
-      email: user.email || "",
-      startingCash:STARTING_CASH,
-      cash:STARTING_CASH,
-      holdings:{},
-      favorites:[],
-      tradeCount:0,
-      history:[],
-      totalAsset:STARTING_CASH,
-      createdAt:new Date().toISOString(),
-      updatedAt:serverTimestamp()
-    };
-    await setDoc(ref, state.user);
+  if(!user){
+    state.uid = null;
+    loading(false);
+    return;
   }
 
-  await save(false);
-  renderAll();
-  show("homeScreen");
-  loading(false);
+  if(state.screen !== "authScreen") return;
+
+  try{
+    loading(true);
+    state.uid = user.uid;
+    state.email = user.email || "";
+
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
+
+    if(snap.exists()){
+      state.user = {...state.user, ...snap.data()};
+      if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
+      if(!state.user.history) state.user.history = [];
+      if(!state.user.favorites) state.user.favorites = [];
+      if(!state.user.holdings) state.user.holdings = {};
+      renderAll();
+      show("homeScreen");
+    }
   }catch(e){
     console.error(e);
+    setAuthError(errorMessage(e));
+  }finally{
     loading(false);
-    toast(errorMessage(e));
   }
 });
 
 function errorMessage(e){
   const c = e?.code || "";
-  if(c.includes("email-already-in-use")) return "이미 사용 중인 이메일";
-  if(c.includes("invalid-email")) return "이메일 형식 오류";
-  if(c.includes("weak-password")) return "비밀번호가 너무 짧음";
-  if(c.includes("invalid-credential")) return "이름 또는 비밀번호가 틀림";
-  if(c.includes("missing-password")) return "비밀번호를 입력하세요";
-  if(c.includes("operation-not-allowed")) return "Firebase에서 이메일/비밀번호 로그인을 켜야 합니다";
-  if(c.includes("permission-denied")) return "Firestore 규칙 때문에 저장을 못 했습니다";
-  if(c.includes("network-request-failed")) return "네트워크 연결을 확인하세요";
+  if(c.includes("email-already-in-use")) return "이미 사용 중인 이름입니다. 로그인으로 들어가세요.";
+  if(c.includes("invalid-email")) return "이름 처리 중 오류가 났습니다.";
+  if(c.includes("weak-password")) return "비밀번호는 6자 이상이어야 합니다.";
+  if(c.includes("user-not-found")) return "없는 이름입니다. 먼저 회원가입하세요.";
+  if(c.includes("wrong-password")) return "비밀번호가 틀렸습니다.";
+  if(c.includes("invalid-credential")) return "이름 또는 비밀번호가 틀렸습니다.";
+  if(c.includes("missing-password")) return "비밀번호를 입력하세요.";
+  if(c.includes("operation-not-allowed")) return "Firebase에서 Email/Password 로그인을 켜야 합니다.";
+  if(c.includes("permission-denied")) return "Firestore 규칙 때문에 저장을 못 했습니다.";
+  if(c.includes("network-request-failed")) return "네트워크 연결을 확인하세요.";
   return "오류: " + c;
-}
-
-async function save(showToast=false){
-  if(!state.uid) return;
-  state.user.totalAsset = totalAsset();
-  state.user.updatedAt = serverTimestamp();
-  await setDoc(doc(db, "users", state.uid), state.user, { merge:true });
-  if(showToast) toast("저장 완료");
 }
 
 function stockRow(s){

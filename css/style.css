@@ -340,3 +340,16 @@ input::placeholder{color:#6b7280}
   .bottom-nav{position:absolute;bottom:14px}
   .market-panel{height:610px}
 }
+
+
+.auth-error{
+  margin:12px 0 0!important;
+  padding:12px 14px;
+  border-radius:16px;
+  background:rgba(255,70,103,.13);
+  border:1px solid rgba(255,70,103,.28);
+  color:#fecaca!important;
+  font-size:13px;
+  font-weight:800;
+  line-height:1.45;
+}
