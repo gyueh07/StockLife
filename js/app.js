@@ -127,6 +127,10 @@ function show(screen){
 
 document.querySelectorAll("[data-route]").forEach(btn=>btn.addEventListener("click",()=>show(btn.dataset.route)));
 
+if($("listingTime")){
+  $("listingTime").textContent = LISTING_TEXT;
+}
+
 $("profileQuick").onclick = () => show("profileScreen");
 
 $("showSignup").onclick = () => {
