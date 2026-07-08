@@ -2,144 +2,173 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StockLife</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>StockLife v2</title>
+  <link rel="stylesheet" href="./css/style.css" />
 </head>
 <body>
-  <div class="ambient ambient-1"></div>
-  <div class="ambient ambient-2"></div>
-  <div class="ambient ambient-3"></div>
+  <div class="background">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid"></div>
+  </div>
 
-  <div class="phone">
-    <div class="noise"></div>
+  <div id="toast" class="toast"></div>
 
-    <section class="screen auth-screen active" id="authScreen">
-      <div class="brand">
-        <div class="logo-mark">SL</div>
-        <p>STOCKLIFE</p>
-        <h1>투자로 성장하는<br />가상 주식 게임</h1>
+  <div class="app-frame">
+    <section id="authScreen" class="screen auth-screen active">
+      <div class="auth-hero">
+        <div class="logo">SL</div>
+        <div class="brand-text">
+          <span>STOCKLIFE</span>
+          <h1>투자로 성장하는<br />가상 주식 게임</h1>
+        </div>
       </div>
 
-      <div class="auth-card" id="loginBox">
+      <div id="loginBox" class="auth-card">
         <h2>로그인</h2>
+        <p>친구들과 자산 랭킹을 겨뤄보세요.</p>
+
         <label>이메일</label>
-        <input id="loginEmail" type="email" placeholder="email@example.com" autocomplete="email" />
+        <input id="loginEmail" type="email" placeholder="email@example.com" />
+
         <label>비밀번호</label>
-        <input id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password" />
-        <button class="primary" id="loginBtn">로그인</button>
-        <button class="text-btn" id="showSignupBtn">처음이면 회원가입</button>
+        <input id="loginPassword" type="password" placeholder="비밀번호" />
+
+        <button id="loginBtn" class="primary-btn">
+          <span>로그인</span>
+        </button>
+
+        <button id="showSignup" class="link-btn">처음이면 회원가입</button>
       </div>
 
-      <div class="auth-card hidden" id="signupBox">
+      <div id="signupBox" class="auth-card hidden">
         <h2>회원가입</h2>
-        <label>닉네임</label>
-        <input id="signupNickname" type="text" placeholder="닉네임" maxlength="12" />
-        <label>이메일</label>
-        <input id="signupEmail" type="email" placeholder="email@example.com" autocomplete="email" />
-        <label>비밀번호</label>
-        <input id="signupPassword" type="password" placeholder="6자 이상" autocomplete="new-password" />
-        <button class="primary" id="signupBtn">계정 만들기</button>
-        <button class="text-btn" id="showLoginBtn">이미 계정이 있어요</button>
-      </div>
+        <p>시작 자금 1,000,000원이 지급됩니다.</p>
 
-      <p class="auth-note">시작 자금은 1,000,000원입니다.</p>
+        <label>닉네임</label>
+        <input id="signupNickname" type="text" maxlength="12" placeholder="닉네임" />
+
+        <label>이메일</label>
+        <input id="signupEmail" type="email" placeholder="email@example.com" />
+
+        <label>비밀번호</label>
+        <input id="signupPassword" type="password" placeholder="6자 이상" />
+
+        <button id="signupBtn" class="primary-btn">
+          <span>계정 만들기</span>
+        </button>
+
+        <button id="showLogin" class="link-btn">로그인으로 돌아가기</button>
+      </div>
     </section>
 
-    <header class="topbar hidden" id="topbar">
+    <header id="header" class="header hidden">
       <div>
-        <p class="kicker">STOCKLIFE</p>
+        <span class="header-kicker">STOCKLIFE</span>
         <h2 id="pageTitle">홈</h2>
       </div>
-      <button class="profile-button" id="profileButton">SL</button>
+      <button id="profileQuick" class="profile-quick">SL</button>
     </header>
 
-    <section class="screen app-screen" id="homeScreen">
-      <div class="asset-card">
-        <div class="card-orbit"></div>
-        <p class="label">총 자산</p>
+    <main id="homeScreen" class="screen app-screen">
+      <section class="asset-card">
+        <div class="asset-card-glow"></div>
+        <div class="asset-top">
+          <span>총 자산</span>
+          <button id="refreshBtn">↻</button>
+        </div>
         <h1 id="totalAsset">0원</h1>
+        <p id="assetDelta" class="flat">0원</p>
 
-        <div class="asset-wave">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <div class="bars">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
         </div>
 
-        <div class="stat-grid">
+        <div class="mini-grid">
           <div>
             <p>보유 현금</p>
-            <strong id="cashValue">0원</strong>
+            <b id="cashValue">0원</b>
           </div>
           <div>
-            <p>오늘 손익</p>
-            <strong id="todayProfit" class="flat">0원</strong>
+            <p>주식 평가금</p>
+            <b id="stockValue">0원</b>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="shortcut-grid">
-        <button data-go="marketScreen"><span>📈</span><b>시장</b></button>
-        <button data-go="walletScreen"><span>💼</span><b>지갑</b></button>
-        <button data-go="rankScreen"><span>🏆</span><b>랭킹</b></button>
-        <button data-go="profileScreen"><span>👤</span><b>프로필</b></button>
-      </div>
+      <section class="actions-grid">
+        <button data-route="marketScreen"><em>📈</em><span>시장</span></button>
+        <button data-route="walletScreen"><em>💼</em><span>지갑</span></button>
+        <button data-route="rankScreen"><em>🏆</em><span>랭킹</span></button>
+        <button data-route="profileScreen"><em>👤</em><span>프로필</span></button>
+      </section>
 
-      <div class="panel">
-        <div class="panel-head">
+      <section class="panel">
+        <div class="panel-title">
           <h3>관심 종목</h3>
-          <small>즐겨찾기</small>
+          <small id="favoriteSummary">0개</small>
         </div>
-        <div id="favoriteList" class="empty-box">관심 종목이 없습니다.</div>
-      </div>
-    </section>
+        <div id="favoriteList" class="empty">관심 종목이 없습니다.</div>
+      </section>
 
-    <section class="screen app-screen" id="marketScreen">
-      <div class="search-bar">
-        <span>🔎</span>
-        <input id="searchInput" type="text" placeholder="종목 검색" />
+      <section class="panel">
+        <div class="panel-title">
+          <h3>급등 종목</h3>
+          <small>직전 갱신 대비</small>
+        </div>
+        <div id="hotList"></div>
+      </section>
+    </main>
+
+    <main id="marketScreen" class="screen app-screen">
+      <div class="market-toolbar">
+        <div class="search">
+          <span>🔍</span>
+          <input id="searchInput" type="text" placeholder="종목 검색" />
+        </div>
+        <button id="sortBtn" class="square-btn">정렬</button>
       </div>
 
-      <div class="chip-tabs">
-        <button class="active" data-filter="all">전체</button>
-        <button data-filter="up">상승</button>
-        <button data-filter="down">하락</button>
-        <button data-filter="hold">보유</button>
+      <div class="tabs">
+        <button class="tab active" data-filter="all">전체</button>
+        <button class="tab" data-filter="up">상승</button>
+        <button class="tab" data-filter="down">하락</button>
+        <button class="tab" data-filter="hold">보유</button>
       </div>
 
-      <div class="panel">
-        <div class="panel-head">
+      <section class="panel market-panel">
+        <div class="panel-title">
           <h3>시장</h3>
-          <small>5분마다 갱신</small>
+          <small>20종목 · <span id="tickTimer">--:--</span></small>
         </div>
-        <div id="marketList"></div>
-      </div>
-    </section>
+        <div id="marketList" class="scroll-area"></div>
+      </section>
+    </main>
 
-    <section class="screen app-screen" id="detailScreen">
-      <button class="back" data-go="marketScreen">← 시장으로</button>
+    <main id="detailScreen" class="screen app-screen">
+      <button class="back-btn" data-route="marketScreen">← 시장</button>
 
-      <div class="detail-card">
+      <section class="detail-card">
         <div class="detail-head">
           <div>
-            <p class="label">종목 상세</p>
+            <span>종목 상세</span>
             <h2 id="detailName">-</h2>
           </div>
-          <button class="star" id="starBtn">☆</button>
+          <button id="favoriteBtn" class="favorite-btn">☆</button>
         </div>
 
         <h1 id="detailPrice">0원</h1>
         <p id="detailChange" class="flat">0.00%</p>
 
-        <div class="chart-card">
-          <div class="chart-bg"></div>
-          <svg viewBox="0 0 320 170" preserveAspectRatio="none">
+        <div class="chart-wrap">
+          <div class="chart-lines"></div>
+          <svg viewBox="0 0 340 190" preserveAspectRatio="none">
             <defs>
-              <linearGradient id="stockLineGradient" x1="0" x2="1">
-                <stop offset="0%" stop-color="#c084fc" />
-                <stop offset="100%" stop-color="#22d3ee" />
-              </linearGradient>
-              <linearGradient id="stockFillGradient" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stop-color="rgba(192,132,252,.35)" />
-                <stop offset="100%" stop-color="rgba(34,211,238,0)" />
+              <linearGradient id="lineGradient" x1="0" x2="1">
+                <stop offset="0%" stop-color="#d946ef"/>
+                <stop offset="100%" stop-color="#22d3ee"/>
               </linearGradient>
             </defs>
             <polyline id="chartFill" points=""></polyline>
@@ -150,122 +179,128 @@
         <div class="info-grid">
           <div>
             <p>보유 수량</p>
-            <strong id="detailShares">0주</strong>
+            <b id="detailShares">0주</b>
           </div>
           <div>
             <p>평균단가</p>
-            <strong id="detailAvg">-</strong>
+            <b id="detailAvg">-</b>
           </div>
           <div>
             <p>평가손익</p>
-            <strong id="detailPnL" class="flat">-</strong>
+            <b id="detailProfit" class="flat">-</b>
           </div>
           <div>
-            <p>다음 갱신</p>
-            <strong id="nextTick">--:--</strong>
+            <p>최신 갱신</p>
+            <b id="detailTimer">--:--</b>
           </div>
         </div>
 
-        <div class="trade-grid">
+        <div class="trade-buttons">
           <button class="buy" data-trade="buy">매수</button>
           <button class="sell" data-trade="sell">매도</button>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
 
-    <section class="screen app-screen" id="walletScreen">
-      <div class="wallet-card">
-        <p class="label">내 지갑</p>
+    <main id="walletScreen" class="screen app-screen">
+      <section class="wallet-card">
+        <span>내 지갑</span>
         <h1 id="walletTotal">0원</h1>
-        <div class="stat-grid">
+        <div class="mini-grid">
           <div>
             <p>현금</p>
-            <strong id="walletCash">0원</strong>
+            <b id="walletCash">0원</b>
           </div>
           <div>
-            <p>주식 평가금</p>
-            <strong id="walletStockValue">0원</strong>
+            <p>평가금액</p>
+            <b id="walletStocks">0원</b>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="panel">
-        <div class="panel-head">
+      <section class="panel">
+        <div class="panel-title">
           <h3>보유 종목</h3>
           <small id="holdingCount">0개</small>
         </div>
-        <div id="holdingList" class="empty-box">보유 종목이 없습니다.</div>
-      </div>
-    </section>
+        <div id="holdingList" class="empty">보유 종목이 없습니다.</div>
+      </section>
 
-    <section class="screen app-screen" id="rankScreen">
-      <div class="panel">
-        <div class="panel-head">
+      <section class="panel">
+        <div class="panel-title">
+          <h3>거래 내역</h3>
+          <small>최근 10개</small>
+        </div>
+        <div id="historyList" class="empty">거래 내역이 없습니다.</div>
+      </section>
+    </main>
+
+    <main id="rankScreen" class="screen app-screen">
+      <section class="panel">
+        <div class="panel-title">
           <h3>총 자산 랭킹</h3>
           <small>TOP 20</small>
         </div>
-        <div id="rankingList" class="empty-box">랭킹을 불러오는 중입니다.</div>
-      </div>
-    </section>
+        <div id="rankList" class="empty">랭킹을 불러오는 중입니다.</div>
+      </section>
+    </main>
 
-    <section class="screen app-screen" id="profileScreen">
-      <div class="profile-card">
-        <div class="avatar" id="avatar">SL</div>
+    <main id="profileScreen" class="screen app-screen">
+      <section class="profile-card">
+        <div id="avatar" class="avatar">SL</div>
         <h2 id="profileName">투자자</h2>
         <p id="profileEmail">-</p>
 
         <div class="info-grid">
           <div>
-            <p>시작 자금</p>
-            <strong>1,000,000원</strong>
+            <p>총 자산</p>
+            <b id="profileTotal">0원</b>
           </div>
           <div>
             <p>거래 횟수</p>
-            <strong id="tradeCount">0회</strong>
+            <b id="profileTrades">0회</b>
           </div>
           <div>
             <p>관심 종목</p>
-            <strong id="favCount">0개</strong>
+            <b id="profileFavs">0개</b>
           </div>
           <div>
             <p>상태</p>
-            <strong>온라인</strong>
+            <b>온라인</b>
           </div>
         </div>
 
-        <button class="logout" id="logoutBtn">로그아웃</button>
-      </div>
-    </section>
+        <button id="logoutBtn" class="logout-btn">로그아웃</button>
+      </section>
+    </main>
 
-    <nav class="bottom-nav hidden" id="bottomNav">
-      <button class="nav active" data-go="homeScreen">🏠<span>홈</span></button>
-      <button class="nav" data-go="marketScreen">📈<span>시장</span></button>
-      <button class="nav" data-go="walletScreen">💼<span>지갑</span></button>
-      <button class="nav" data-go="rankScreen">🏆<span>랭킹</span></button>
-      <button class="nav" data-go="profileScreen">👤<span>프로필</span></button>
+    <nav id="nav" class="bottom-nav hidden">
+      <button class="nav-btn active" data-route="homeScreen">🏠<span>홈</span></button>
+      <button class="nav-btn" data-route="marketScreen">📈<span>시장</span></button>
+      <button class="nav-btn" data-route="walletScreen">💼<span>지갑</span></button>
+      <button class="nav-btn" data-route="rankScreen">🏆<span>랭킹</span></button>
+      <button class="nav-btn" data-route="profileScreen">👤<span>프로필</span></button>
     </nav>
   </div>
 
-  <div class="modal-bg" id="tradeModal">
-    <div class="trade-modal">
-      <h2 id="tradeTitle">매수</h2>
-      <p id="tradeSub">-</p>
+  <div id="tradeModal" class="modal">
+    <div class="modal-sheet">
+      <h2 id="modalTitle">매수</h2>
+      <p id="modalSub">-</p>
 
-      <div class="qty-box">
-        <button id="minusQty">-</button>
+      <div class="qty-control">
+        <button id="qtyMinus">−</button>
         <strong id="qtyText">1주</strong>
-        <button id="plusQty">+</button>
+        <button id="qtyPlus">+</button>
       </div>
 
-      <p id="tradeTotal" class="trade-total">총 0원</p>
+      <p id="modalTotal" class="modal-total">총 0원</p>
 
-      <button class="primary" id="confirmTrade">확인</button>
-      <button class="ghost" id="closeTrade">취소</button>
+      <button id="confirmTrade" class="primary-btn">확인</button>
+      <button id="closeModal" class="ghost-btn">취소</button>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
-
-  <script type="module" src="./script.js"></script>
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
