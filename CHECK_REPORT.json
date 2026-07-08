@@ -1,12 +1,5 @@
 {
-  "file_sizes": {
-    "index.html": 12277,
-    "css/style.css": 15159,
-    "js/firebase.js": 701,
-    "js/data.js": 1738,
-    "js/market.js": 2525,
-    "js/app.js": 21699
-  },
+  "version": "v3.1 Name Login",
   "missing_html_ids_referenced_by_app": [],
   "missing_import_files": [],
   "status": "OK"

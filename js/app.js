@@ -11,7 +11,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   collection,
   query,
   orderBy,
@@ -22,6 +21,26 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const STARTING_CASH = 1000000;
+const INTERNAL_DOMAIN = "stocklife.local";
+
+function normalizeLoginName(name){
+  return (name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9가-힣ㄱ-ㅎㅏ-ㅣ_-]/g, "");
+}
+
+function encodeNameForEmail(name){
+  return encodeURIComponent(normalizeLoginName(name)).replace(/%/g, "x").toLowerCase();
+}
+
+function nameToInternalEmail(name){
+  const clean = normalizeLoginName(name);
+  if(!clean) return "";
+  if(clean.includes("@")) return clean;
+  return `${encodeNameForEmail(clean)}@${INTERNAL_DOMAIN}`;
+}
 
 const state = {
   uid:null,
@@ -117,12 +136,12 @@ $("showLogin").onclick = () => {
 };
 
 $("signupBtn").onclick = async () => {
-  const nickname = $("signupNickname").value.trim();
-  const email = $("signupEmail").value.trim();
+  const loginName = $("signupName").value.trim();
   const password = $("signupPassword").value.trim();
+  const email = nameToInternalEmail(loginName);
 
-  if(!nickname || !email || password.length < 6){
-    toast("닉네임, 이메일, 비밀번호 6자 이상 입력");
+  if(!loginName || !email || password.length < 6){
+    toast("이름과 비밀번호 6자 이상 입력");
     return;
   }
 
@@ -130,7 +149,8 @@ $("signupBtn").onclick = async () => {
     loading(true);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const data = {
-      nickname,
+      nickname: loginName,
+      loginName,
       email,
       startingCash:STARTING_CASH,
       cash:STARTING_CASH,
@@ -142,7 +162,7 @@ $("signupBtn").onclick = async () => {
       createdAt:new Date().toISOString(),
       updatedAt:serverTimestamp()
     };
-    await setDoc(doc(db, "users", cred.user.uid), data);
+    await setDoc(doc(db, "users", cred.user.uid), data, { merge:true });
     toast("회원가입 완료");
   }catch(e){
     toast(errorMessage(e));
@@ -152,10 +172,12 @@ $("signupBtn").onclick = async () => {
 };
 
 $("loginBtn").onclick = async () => {
-  const email = $("loginEmail").value.trim();
+  const loginName = $("loginName").value.trim();
   const password = $("loginPassword").value.trim();
-  if(!email || !password){
-    toast("이메일과 비밀번호 입력");
+  const email = nameToInternalEmail(loginName);
+
+  if(!loginName || !password){
+    toast("이름과 비밀번호 입력");
     return;
   }
 
@@ -194,7 +216,8 @@ onAuthStateChanged(auth, async (user) => {
     if(!state.user.holdings) state.user.holdings = {};
   }else{
     state.user = {
-      nickname: user.email?.split("@")[0] || "투자자",
+      nickname: user.email?.includes("@stocklife.local") ? "투자자" : (user.email?.split("@")[0] || "투자자"),
+      loginName: user.email?.includes("@stocklife.local") ? "" : (user.email?.split("@")[0] || ""),
       email: user.email || "",
       startingCash:STARTING_CASH,
       cash:STARTING_CASH,
@@ -220,7 +243,9 @@ function errorMessage(e){
   if(c.includes("email-already-in-use")) return "이미 사용 중인 이메일";
   if(c.includes("invalid-email")) return "이메일 형식 오류";
   if(c.includes("weak-password")) return "비밀번호가 너무 짧음";
-  if(c.includes("invalid-credential")) return "로그인 정보가 틀림";
+  if(c.includes("invalid-credential")) return "이름 또는 비밀번호가 틀림";
+  if(c.includes("missing-password")) return "비밀번호를 입력하세요";
+  if(c.includes("operation-not-allowed")) return "Firebase에서 이메일/비밀번호 로그인을 켜야 합니다";
   if(c.includes("permission-denied")) return "Firestore 권한 설정 필요";
   return "오류: " + c;
 }
@@ -229,7 +254,7 @@ async function save(showToast=false){
   if(!state.uid) return;
   state.user.totalAsset = totalAsset();
   state.user.updatedAt = serverTimestamp();
-  await updateDoc(doc(db, "users", state.uid), state.user);
+  await setDoc(doc(db, "users", state.uid), state.user, { merge:true });
   if(showToast) toast("저장 완료");
 }
 
@@ -640,7 +665,7 @@ async function renderRank(){
 function renderProfile(){
   const name = state.user.nickname || "투자자";
   $("profileName").textContent = name;
-  $("profileEmail").textContent = state.email || state.user.email || "-";
+  $("profileEmail").textContent = state.user.loginName ? "이름 로그인" : (state.email || state.user.email || "-");
   $("avatar").textContent = name.slice(0,2).toUpperCase();
   $("profileQuick").textContent = name.slice(0,2).toUpperCase();
   $("profileTotal").textContent = won(totalAsset());
