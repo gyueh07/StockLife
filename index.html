@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#060817" />
-  <title>StockLife v3.0 Release</title>
-  <link rel="stylesheet" href="./css/style.css?v=3.5" />
+  <title>StockLife v3.6 Release</title>
+  <link rel="stylesheet" href="./css/style.css?v=3.6" />
 </head>
 <body>
   <div class="background">
@@ -17,6 +17,15 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <div id="tradeAlert" class="trade-alert hidden">
+    <div class="trade-alert-icon"></div>
+    <div>
+      <b class="trade-alert-title"></b>
+      <p class="trade-alert-meta"></p>
+    </div>
+    <strong class="trade-alert-amount"></strong>
+  </div>
 
   <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loading-logo">SL</div>
@@ -370,6 +379,6 @@
     </div>
   </div>
 
-  <script type="module" src="./js/app.js?v=3.5"></script>
+  <script type="module" src="./js/app.js?v=3.6"></script>
 </body>
 </html>

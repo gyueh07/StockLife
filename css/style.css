@@ -331,6 +331,44 @@ input::placeholder{color:#6b7280}
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+.trade-alert{
+  position:fixed;
+  z-index:95;
+  left:50%;
+  top:18px;
+  transform:translateX(-50%) translateY(-20px);
+  width:min(390px,calc(100% - 28px));
+  display:grid;
+  grid-template-columns:56px 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:14px;
+  border-radius:22px;
+  background:rgba(15,23,42,.96);
+  border:1px solid var(--line);
+  box-shadow:0 24px 70px rgba(0,0,0,.45);
+  backdrop-filter:blur(18px);
+  opacity:0;
+  pointer-events:none;
+  transition:.24s ease;
+}
+.trade-alert.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.trade-alert-icon{
+  width:48px;
+  height:48px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  color:white;
+  font-size:13px;
+  font-weight:900;
+}
+.buy-alert .trade-alert-icon{background:linear-gradient(135deg,#ff4667,#fb7185)}
+.sell-alert .trade-alert-icon{background:linear-gradient(135deg,#2563eb,#38bdf8)}
+.trade-alert-title{display:block;font-size:15px;margin-bottom:4px}
+.trade-alert-meta{color:var(--muted);font-size:12px}
+.trade-alert-amount{white-space:nowrap;font-size:14px}
+
 @media(min-width:820px){
   body{align-items:center}
   .app-frame{

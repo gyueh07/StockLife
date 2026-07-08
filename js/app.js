@@ -61,6 +61,8 @@ const state = {
   sort:"name"
 };
 
+let tradeAlertTimer = null;
+
 const titles = {
   homeScreen:"홈",
   marketScreen:"시장",
@@ -79,6 +81,29 @@ function toast(msg){
   $("toast").textContent = msg;
   $("toast").classList.add("show");
   setTimeout(()=>$("toast").classList.remove("show"), 1700);
+}
+
+function showTradeAlert(type, name, qty, price, amount){
+  const el = $("tradeAlert");
+  if(!el){
+    toast(`${type} 완료`);
+    return;
+  }
+
+  const isBuy = type === "매수";
+  el.classList.remove("hidden", "buy-alert", "sell-alert", "show");
+  el.classList.add(isBuy ? "buy-alert" : "sell-alert");
+  el.querySelector(".trade-alert-icon").textContent = type;
+  el.querySelector(".trade-alert-title").textContent = `${name} ${type} 완료`;
+  el.querySelector(".trade-alert-meta").textContent = `${qty}주 · 단가 ${won(price)}`;
+  el.querySelector(".trade-alert-amount").textContent = won(amount);
+
+  requestAnimationFrame(() => el.classList.add("show"));
+  clearTimeout(tradeAlertTimer);
+  tradeAlertTimer = setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.classList.add("hidden"), 240);
+  }, 2600);
 }
 
 function setAuthError(msg=""){
@@ -106,6 +131,23 @@ function totalAsset(){
 
 function totalProfit(){
   return totalAsset() - (state.user.startingCash || STARTING_CASH);
+}
+
+async function save(refreshRank=false, updateRankAfterSave=true){
+  if(!state.uid) return;
+
+  const currentTotal = totalAsset();
+  state.user.totalAsset = currentTotal;
+
+  await setDoc(doc(db, "users", state.uid), {
+    ...state.user,
+    totalAsset: currentTotal,
+    updatedAt: serverTimestamp()
+  }, { merge:true });
+
+  if(updateRankAfterSave && (refreshRank || state.screen === "rankScreen")){
+    await renderRank();
+  }
 }
 
 function show(screen){
@@ -602,6 +644,7 @@ $("confirmTrade").onclick = async () => {
   const price = s.price;
   const amount = price * state.qty;
   const h = holding(s.id);
+  const tradeLabel = state.tradeType === "buy" ? "매수" : "매도";
 
   if(state.tradeType === "buy"){
     if(state.user.cash < amount) return toast("보유 현금이 부족합니다.");
@@ -609,20 +652,21 @@ $("confirmTrade").onclick = async () => {
     const newAvg = ((h.avg*h.shares) + amount) / newShares;
     state.user.cash -= amount;
     state.user.holdings[s.id] = {shares:newShares, avg:newAvg};
-    addHistory("매수", s.name, state.qty, amount);
+    addHistory(tradeLabel, s.name, state.qty, amount);
   }else{
     if(h.shares < state.qty) return toast("보유 수량이 부족합니다.");
     state.user.cash += amount;
     const remain = h.shares - state.qty;
     if(remain <= 0) delete state.user.holdings[s.id];
     else state.user.holdings[s.id] = {shares:remain, avg:h.avg};
-    addHistory("매도", s.name, state.qty, amount);
+    addHistory(tradeLabel, s.name, state.qty, amount);
   }
 
   state.user.tradeCount = (state.user.tradeCount || 0) + 1;
   $("confirmModal").classList.remove("show");
-  await save(false);
-  toast("거래 완료");
+  await save(true);
+  showTradeAlert(tradeLabel, s.name, state.qty, price, amount);
+  toast(`${tradeLabel} 완료`);
   openStock(s.id);
   renderAll();
 };
@@ -694,6 +738,10 @@ function renderWallet(){
 
 async function renderRank(){
   try{
+    if(state.uid){
+      await save(false, false);
+    }
+
     const q = query(collection(db, "users"), orderBy("totalAsset", "desc"), limit(20));
     const snap = await getDocs(q);
     if(snap.empty){
@@ -740,8 +788,13 @@ function renderAll(){
   renderProfile();
 }
 
-$("refreshBtn").onclick = () => {
+$("refreshBtn").onclick = async () => {
   renderAll();
+  try{
+    await save(false);
+  }catch(e){
+    console.error(e);
+  }
   toast("새로고침 완료");
 };
 
