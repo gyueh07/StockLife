@@ -16,7 +16,8 @@ import {
   orderBy,
   limit,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -173,9 +174,17 @@ function holding(id){
   };
 }
 
-function stockValue(){
-  const value = getAllStockViews().reduce((sum,s)=>sum + holding(s.id).shares * s.price, 0);
+function stockValueForHoldings(holdings){
+  const cleanHoldings = normalizeHoldings(holdings);
+  const value = getAllStockViews().reduce((sum,s)=>{
+    const h = cleanHoldings[s.id] || {shares:0};
+    return sum + h.shares * s.price;
+  }, 0);
   return finiteNumber(value, 0);
+}
+
+function stockValue(){
+  return stockValueForHoldings(state.user.holdings);
 }
 
 function totalAsset(){
@@ -201,12 +210,78 @@ async function save(refreshRank=false, updateRankAfterSave=true){
 
   saveQueue = saveQueue
     .catch(() => {})
-    .then(() => setDoc(doc(db, "users", state.uid), payload, { merge:true }));
+    .then(() => setDoc(doc(db, "users", state.uid), payload));
   await saveQueue;
 
   if(updateRankAfterSave && (refreshRank || state.screen === "rankScreen")){
     await renderRank(false);
   }
+}
+
+function makeHistoryItem(type, name, qty, amount){
+  return {
+    type, name, qty, amount,
+    time:new Date().toLocaleString("ko-KR", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})
+  };
+}
+
+async function commitTrade(stock, tradeType, qty, price){
+  if(!state.uid) throw new Error("not-signed-in");
+
+  await saveQueue.catch(() => {});
+
+  const ref = doc(db, "users", state.uid);
+  const tradeLabel = tradeType === "buy" ? "매수" : "매도";
+  const amount = price * qty;
+  let nextUser = null;
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const serverUser = snap.exists() ? snap.data() : {};
+    const user = normalizeUser({
+      ...state.user,
+      ...serverUser
+    }, state.user.loginName || state.user.nickname || "투자자");
+
+    if(!user.loginName && state.user.loginName) user.loginName = state.user.loginName;
+    if(!user.email && state.user.email) user.email = state.user.email;
+
+    const h = user.holdings?.[stock.id] || {shares:0, avg:0};
+
+    if(tradeType === "buy"){
+      if(user.cash < amount) throw new Error("insufficient-cash");
+      const newShares = h.shares + qty;
+      const newAvg = ((h.avg*h.shares) + amount) / newShares;
+      user.cash -= amount;
+      user.holdings[stock.id] = {shares:newShares, avg:newAvg};
+    }else{
+      if(h.shares < qty) throw new Error("insufficient-shares");
+      user.cash += amount;
+      const remain = h.shares - qty;
+      if(remain <= 0) delete user.holdings[stock.id];
+      else user.holdings[stock.id] = {shares:remain, avg:h.avg};
+    }
+
+    user.tradeCount = (user.tradeCount || 0) + 1;
+    user.history = [makeHistoryItem(tradeLabel, stock.name, qty, amount), ...(user.history || [])].slice(0,20);
+    user.totalAsset = user.cash + stockValueForHoldings(user.holdings);
+
+    const payload = {
+      ...normalizeUser(user, user.loginName || user.nickname || "투자자"),
+      totalAsset:user.totalAsset,
+      updatedAt:serverTimestamp()
+    };
+
+    tx.set(ref, payload);
+    nextUser = {
+      ...payload,
+      updatedAt:new Date().toISOString()
+    };
+  });
+
+  state.user = normalizeUser(nextUser, nextUser?.loginName || nextUser?.nickname || "투자자");
+  saveQueue = Promise.resolve();
+  return {tradeLabel, amount};
 }
 
 function show(screen){
@@ -343,7 +418,7 @@ $("loginBtn").onclick = async () => {
     if(!state.user.loginName) state.user.loginName = loginName;
     if(!state.user.nickname || state.user.nickname === "투자자") state.user.nickname = loginName;
 
-    await setDoc(ref, {...state.user, totalAsset: totalAsset(), updatedAt: serverTimestamp()}, { merge:true });
+    await save(false, false);
 
     renderAll();
     show("homeScreen");
@@ -720,32 +795,21 @@ $("confirmTrade").onclick = async () => {
   const tradeLabel = state.tradeType === "buy" ? "매수" : "매도";
 
   try{
-    if(state.tradeType === "buy"){
-      if(state.user.cash < amount) return toast("보유 현금이 부족합니다.");
-      const newShares = h.shares + qty;
-      const newAvg = ((h.avg*h.shares) + amount) / newShares;
-      state.user.cash -= amount;
-      state.user.holdings[s.id] = {shares:newShares, avg:newAvg};
-      addHistory(tradeLabel, s.name, qty, amount);
-    }else{
-      if(h.shares < qty) return toast("보유 수량이 부족합니다.");
-      state.user.cash += amount;
-      const remain = h.shares - qty;
-      if(remain <= 0) delete state.user.holdings[s.id];
-      else state.user.holdings[s.id] = {shares:remain, avg:h.avg};
-      addHistory(tradeLabel, s.name, qty, amount);
-    }
+    if(state.tradeType === "buy" && state.user.cash < amount) return toast("보유 현금이 부족합니다.");
+    if(state.tradeType === "sell" && h.shares < qty) return toast("보유 수량이 부족합니다.");
 
-    state.user.tradeCount = (state.user.tradeCount || 0) + 1;
+    const result = await commitTrade(s, state.tradeType, qty, price);
     $("confirmModal").classList.remove("show");
-    await save(true);
-    showTradeAlert(tradeLabel, s.name, qty, price, amount);
-    toast(`${tradeLabel} 완료`);
+    if(state.screen === "rankScreen") await renderRank(false);
+    showTradeAlert(result.tradeLabel, s.name, qty, price, result.amount);
+    toast(`${result.tradeLabel} 완료`);
     openStock(s.id);
     renderAll();
   }catch(e){
     console.error(e);
-    toast("거래 저장 중 오류가 발생했습니다.");
+    if(e?.message === "insufficient-cash") toast("보유 현금이 부족합니다.");
+    else if(e?.message === "insufficient-shares") toast("보유 수량이 부족합니다.");
+    else toast("거래 저장 중 오류가 발생했습니다.");
   }finally{
     state.tradeSubmitting = false;
     $("confirmTrade").disabled = false;
@@ -756,10 +820,7 @@ $("confirmTrade").onclick = async () => {
 
 function addHistory(type, name, qty, amount){
   state.user.history ||= [];
-  state.user.history.unshift({
-    type, name, qty, amount,
-    time:new Date().toLocaleString("ko-KR", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})
-  });
+  state.user.history.unshift(makeHistoryItem(type, name, qty, amount));
   state.user.history = state.user.history.slice(0,20);
 }
 
