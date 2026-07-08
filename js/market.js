@@ -18,28 +18,67 @@ export function bucket(offset=0){
   return Math.floor(Date.now() / (5 * 60 * 1000)) + offset;
 }
 
-export function getPrice(stock, offset=0){
-  const b = bucket(offset);
-  const h = hash(stock.id);
-  const drift = Math.sin((b + h % 997) / (34 + stock.vol)) * stock.start * (0.035 * stock.vol);
-  const cycle = Math.sin((b + h % 331) / (9 + stock.vol)) * stock.start * (0.018 * stock.vol);
-  const noise = (random(h + b * 131) - 0.5) * stock.start * (0.026 * stock.vol);
-  let price = stock.start + drift + cycle + noise;
-  price = Math.max(stock.min, Math.min(stock.max, price));
+function getWindowStart(b){
+  return b - 180;
+}
+
+export function getPriceAtBucket(stock, targetBucket){
+  const startBucket = getWindowStart(targetBucket);
+  let price = stock.start;
+  const range = Math.max(1, stock.max - stock.min);
+  const mid = (stock.max + stock.min) / 2;
+
+  for(let b=startBucket; b<=targetBucket; b++){
+    const position = (price - mid) / (range / 2);
+    const wallBias = -position * (0.0022 + stock.vol * 0.00055);
+    const noise = (random(hash(stock.id) + b * 139) - 0.5) * (0.006 + stock.vol * 0.0042);
+    const wave = Math.sin((b + hash(stock.name) % 977) / (10 + stock.vol)) * (0.0009 * stock.vol);
+    let next = price * (1 + wallBias + noise + wave);
+
+    if(next > stock.max){
+      next = stock.max - (next - stock.max) * 0.45;
+    }
+    if(next < stock.min){
+      next = stock.min + (stock.min - next) * 0.45;
+    }
+
+    price = Math.max(stock.min, Math.min(stock.max, next));
+  }
+
   return Math.max(1, Math.round(price));
 }
 
-export function getStockView(stock){
+export function getPrice(stock, offset=0){
+  return getPriceAtBucket(stock, bucket(offset));
+}
+
+export function getChart(stock, range){
+  const cfgMap = {
+    "5m": {points:12, step:1},
+    "1h": {points:12, step:12},
+    "1d": {points:24, step:288},
+    "1w": {points:28, step:504},
+    "all": {points:36, step:1008}
+  };
+  const cfg = cfgMap[range] || cfgMap["5m"];
+  const now = bucket(0);
+  const arr = [];
+  for(let i=cfg.points-1;i>=0;i--){
+    arr.push(getPriceAtBucket(stock, now - i * cfg.step));
+  }
+  return arr;
+}
+
+export function getStockView(stock, range="5m"){
   const price = getPrice(stock, 0);
   const prev = getPrice(stock, -1);
   const change = ((price - prev) / prev) * 100;
-  const chart = [];
-  for(let i=-15;i<=0;i++) chart.push(getPrice(stock, i));
+  const chart = getChart(stock, range);
   return {...stock, price, prev, change, chart};
 }
 
-export function getAllStockViews(){
-  return STOCKS.map(getStockView);
+export function getAllStockViews(range="5m"){
+  return STOCKS.map(s => getStockView(s, range));
 }
 
 export function getNextTickText(){

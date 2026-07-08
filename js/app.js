@@ -1,5 +1,6 @@
 import { auth, db } from "./firebase.js";
-import { getAllStockViews, getNextTickText } from "./market.js";
+import { getAllStockViews, getStockView, getNextTickText } from "./market.js";
+import { STOCKS } from "./data.js";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -20,22 +21,26 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
+const STARTING_CASH = 1000000;
 
 const state = {
   uid:null,
   email:"",
   user:{
     nickname:"투자자",
-    cash:1000000,
+    startingCash:STARTING_CASH,
+    cash:STARTING_CASH,
     holdings:{},
     favorites:[],
     tradeCount:0,
     history:[],
-    totalAsset:1000000
+    totalAsset:STARTING_CASH
   },
   screen:"authScreen",
   filter:"all",
   currentStock:null,
+  chartRange:"5m",
+  currentChartValues:[],
   tradeType:"buy",
   qty:1,
   sort:"name"
@@ -50,14 +55,19 @@ const titles = {
   profileScreen:"프로필"
 };
 
-function won(v){ return Math.round(v).toLocaleString("ko-KR") + "원"; }
+function won(v){ return Math.round(v).toLocaleString("ko-KR") + " 원"; }
 function signWon(v){ return (v > 0 ? "+" : "") + won(v); }
+function rate(v){ return (v > 0 ? "+" : "") + v.toFixed(2) + "%"; }
 function cls(v){ return v > 0 ? "up" : v < 0 ? "down" : "flat"; }
 
 function toast(msg){
   $("toast").textContent = msg;
   $("toast").classList.add("show");
   setTimeout(()=>$("toast").classList.remove("show"), 1700);
+}
+
+function loading(show){
+  $("loadingOverlay").classList.toggle("hidden", !show);
 }
 
 function holding(id){
@@ -72,8 +82,8 @@ function totalAsset(){
   return state.user.cash + stockValue();
 }
 
-function todayProfit(){
-  return getAllStockViews().reduce((sum,s)=>sum + (s.price - s.prev) * holding(s.id).shares, 0);
+function totalProfit(){
+  return totalAsset() - (state.user.startingCash || STARTING_CASH);
 }
 
 function show(screen){
@@ -95,6 +105,8 @@ function show(screen){
 
 document.querySelectorAll("[data-route]").forEach(btn=>btn.addEventListener("click",()=>show(btn.dataset.route)));
 
+$("profileQuick").onclick = () => show("profileScreen");
+
 $("showSignup").onclick = () => {
   $("loginBox").classList.add("hidden");
   $("signupBox").classList.remove("hidden");
@@ -115,16 +127,18 @@ $("signupBtn").onclick = async () => {
   }
 
   try{
+    loading(true);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const data = {
       nickname,
       email,
-      cash:1000000,
+      startingCash:STARTING_CASH,
+      cash:STARTING_CASH,
       holdings:{},
       favorites:[],
       tradeCount:0,
       history:[],
-      totalAsset:1000000,
+      totalAsset:STARTING_CASH,
       createdAt:new Date().toISOString(),
       updatedAt:serverTimestamp()
     };
@@ -132,6 +146,8 @@ $("signupBtn").onclick = async () => {
     toast("회원가입 완료");
   }catch(e){
     toast(errorMessage(e));
+  }finally{
+    loading(false);
   }
 };
 
@@ -144,9 +160,11 @@ $("loginBtn").onclick = async () => {
   }
 
   try{
+    loading(true);
     await signInWithEmailAndPassword(auth, email, password);
   }catch(e){
     toast(errorMessage(e));
+    loading(false);
   }
 };
 
@@ -158,6 +176,7 @@ $("logoutBtn").onclick = async () => {
 onAuthStateChanged(auth, async (user) => {
   if(!user){
     state.uid = null;
+    loading(false);
     return;
   }
 
@@ -169,16 +188,21 @@ onAuthStateChanged(auth, async (user) => {
 
   if(snap.exists()){
     state.user = {...state.user, ...snap.data()};
+    if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
+    if(!state.user.history) state.user.history = [];
+    if(!state.user.favorites) state.user.favorites = [];
+    if(!state.user.holdings) state.user.holdings = {};
   }else{
     state.user = {
       nickname: user.email?.split("@")[0] || "투자자",
       email: user.email || "",
-      cash:1000000,
+      startingCash:STARTING_CASH,
+      cash:STARTING_CASH,
       holdings:{},
       favorites:[],
       tradeCount:0,
       history:[],
-      totalAsset:1000000,
+      totalAsset:STARTING_CASH,
       createdAt:new Date().toISOString(),
       updatedAt:serverTimestamp()
     };
@@ -188,6 +212,7 @@ onAuthStateChanged(auth, async (user) => {
   await save(false);
   renderAll();
   show("homeScreen");
+  loading(false);
 });
 
 function errorMessage(e){
@@ -228,16 +253,30 @@ function bindRows(root=document){
   });
 }
 
+function animateNumber(el, target){
+  const numeric = parseInt((el.dataset.value || "0"), 10);
+  const start = Number.isFinite(numeric) ? numeric : 0;
+  const duration = 420;
+  const begin = performance.now();
+
+  function tick(now){
+    const t = Math.min(1, (now - begin) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const value = start + (target - start) * eased;
+    el.textContent = won(value);
+    if(t < 1) requestAnimationFrame(tick);
+    else el.dataset.value = Math.round(target);
+  }
+  requestAnimationFrame(tick);
+}
+
 function renderHome(){
   const total = totalAsset();
   const sv = stockValue();
-  const tp = todayProfit();
 
-  $("totalAsset").textContent = won(total);
+  animateNumber($("totalAsset"), total);
   $("cashValue").textContent = won(state.user.cash);
   $("stockValue").textContent = won(sv);
-  $("assetDelta").textContent = signWon(tp);
-  $("assetDelta").className = cls(tp);
 
   const favs = getAllStockViews().filter(s=>state.user.favorites?.includes(s.id));
   $("favoriteSummary").textContent = `${favs.length}개`;
@@ -267,7 +306,22 @@ function renderMarket(){
   if(state.sort === "change") list.sort((a,b)=>b.change-a.change);
   if(state.sort === "name") list.sort((a,b)=>a.name.localeCompare(b.name, "ko"));
 
-  $("marketList").innerHTML = list.map(stockRow).join("") || `<div class="empty">표시할 종목이 없습니다.</div>`;
+  let html = "";
+  if(state.filter === "all" && !keyword){
+    const favIds = state.user.favorites || [];
+    const favs = list.filter(s=>favIds.includes(s.id));
+    const rest = list.filter(s=>!favIds.includes(s.id));
+    if(favs.length){
+      html += `<div class="favorite-section-title">★ 관심 종목</div>`;
+      html += favs.map(stockRow).join("");
+      html += `<div class="market-divider"></div>`;
+    }
+    html += rest.map(stockRow).join("");
+  }else{
+    html = list.map(stockRow).join("");
+  }
+
+  $("marketList").innerHTML = html || `<div class="empty">표시할 종목이 없습니다.</div>`;
   bindRows($("marketList"));
 }
 
@@ -287,7 +341,8 @@ $("sortBtn").onclick = () => {
 };
 
 function openStock(id){
-  const s = getAllStockViews().find(x=>x.id === id);
+  const base = STOCKS.find(x => x.id === id);
+  const s = getStockView(base, state.chartRange);
   if(!s) return;
   state.currentStock = s;
 
@@ -300,8 +355,11 @@ function openStock(id){
   $("detailShares").textContent = `${h.shares}주`;
   $("detailAvg").textContent = h.shares ? won(h.avg) : "-";
   const profit = (s.price - h.avg) * h.shares;
+  const profitRate = h.shares ? ((s.price - h.avg) / h.avg) * 100 : 0;
   $("detailProfit").textContent = h.shares ? signWon(profit) : "-";
   $("detailProfit").className = cls(profit);
+  $("detailRate").textContent = h.shares ? rate(profitRate) : "-";
+  $("detailRate").className = cls(profitRate);
 
   const fav = state.user.favorites?.includes(s.id);
   $("favoriteBtn").textContent = fav ? "★" : "☆";
@@ -311,14 +369,25 @@ function openStock(id){
   show("detailScreen");
 }
 
+document.querySelectorAll(".chart-tab").forEach(btn=>{
+  btn.onclick = () => {
+    document.querySelectorAll(".chart-tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    state.chartRange = btn.dataset.range;
+    if(state.currentStock) openStock(state.currentStock.id);
+  };
+});
+
 $("favoriteBtn").onclick = async () => {
   const id = state.currentStock?.id;
   if(!id) return;
   state.user.favorites ||= [];
   if(state.user.favorites.includes(id)){
     state.user.favorites = state.user.favorites.filter(x=>x!==id);
+    toast("관심 종목에서 제거");
   }else{
     state.user.favorites.push(id);
+    toast("관심 종목에 추가");
   }
   await save(false);
   openStock(id);
@@ -326,6 +395,7 @@ $("favoriteBtn").onclick = async () => {
 };
 
 function drawChart(values){
+  state.currentChartValues = values;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(1, max - min);
@@ -337,6 +407,24 @@ function drawChart(values){
   $("chartLine").setAttribute("points", points);
   $("chartFill").setAttribute("points", `${points} 340,190 0,190`);
 }
+
+const chartWrap = $("chartWrap");
+chartWrap.addEventListener("pointermove", (e)=>{
+  if(!state.currentChartValues.length) return;
+  const rect = chartWrap.getBoundingClientRect();
+  const x = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
+  const y = Math.min(Math.max(0, e.clientY - rect.top), rect.height);
+  const idx = Math.round((x / rect.width) * (state.currentChartValues.length - 1));
+  const value = state.currentChartValues[idx];
+
+  $("crosshair").classList.remove("hidden");
+  $("crosshair").querySelector(".v-line").style.left = `${x}px`;
+  $("crosshair").querySelector(".h-line").style.top = `${y}px`;
+  $("crosshairTip").style.left = `${x}px`;
+  $("crosshairTip").style.top = `${y}px`;
+  $("crosshairTip").textContent = won(value);
+});
+chartWrap.addEventListener("pointerleave", ()=>$("crosshair").classList.add("hidden"));
 
 document.querySelectorAll("[data-trade]").forEach(btn=>{
   btn.onclick = () => {
@@ -355,12 +443,74 @@ function openModal(){
 }
 
 function updateModal(){
-  $("qtyText").textContent = `${state.qty}주`;
-  $("modalTotal").textContent = `총 ${won(state.currentStock.price * state.qty)}`;
+  const s = state.currentStock;
+  const h = holding(s.id);
+  const amount = s.price * state.qty;
+  const isBuy = state.tradeType === "buy";
+  const ok = isBuy ? state.user.cash >= amount : h.shares >= state.qty;
+
+  $("qtyInput").value = state.qty;
+  $("modalTotal").textContent = won(amount);
+  $("modalTotal").className = ok ? "" : "invalid";
+  $("modalCurrentPrice").textContent = won(s.price);
+
+  $("tradeAvailableLabel").textContent = isBuy ? "보유 현금" : "보유 수량";
+  $("tradeAvailable").textContent = isBuy ? won(state.user.cash) : `${h.shares}주`;
+
+  $("previewLabel").textContent = isBuy ? "예상 평균단가" : "예상 현금";
+  if(isBuy){
+    const newShares = h.shares + state.qty;
+    const newAvg = ((h.avg * h.shares) + amount) / newShares;
+    $("previewAvg").textContent = won(newAvg);
+    $("afterLabel").textContent = "매수 후 현금";
+    $("afterCash").textContent = won(state.user.cash - amount);
+  }else{
+    $("previewAvg").textContent = won(state.user.cash + amount);
+    $("afterLabel").textContent = "매도 후 현금";
+    $("afterCash").textContent = won(state.user.cash + amount);
+  }
+
+  let warning = "";
+  if(isBuy && !ok) warning = `${won(amount - state.user.cash)} 부족합니다.`;
+  if(!isBuy && !ok) warning = `${state.qty - h.shares}주를 초과하여 판매할 수 없습니다.`;
+  $("tradeWarning").textContent = warning;
+  $("openConfirm").disabled = !ok;
 }
+
 $("qtyMinus").onclick = () => { state.qty = Math.max(1, state.qty-1); updateModal(); };
 $("qtyPlus").onclick = () => { state.qty += 1; updateModal(); };
+$("qtyInput").oninput = () => {
+  state.qty = Math.max(1, parseInt($("qtyInput").value || "1", 10));
+  updateModal();
+};
+$("maxBtn").onclick = () => {
+  const s = state.currentStock;
+  const h = holding(s.id);
+  if(state.tradeType === "buy"){
+    state.qty = Math.max(1, Math.floor(state.user.cash / s.price));
+  }else{
+    state.qty = Math.max(1, h.shares);
+  }
+  updateModal();
+};
 $("closeModal").onclick = () => $("tradeModal").classList.remove("show");
+
+$("openConfirm").onclick = () => {
+  const s = state.currentStock;
+  const amount = s.price * state.qty;
+  const afterCash = state.tradeType === "buy" ? state.user.cash - amount : state.user.cash + amount;
+  $("confirmTitle").textContent = state.tradeType === "buy" ? "매수 확인" : "매도 확인";
+  $("confirmSub").textContent = `${s.name}`;
+  $("confirmQty").textContent = `${state.qty}주`;
+  $("confirmAmount").textContent = won(amount);
+  $("confirmAfterCash").textContent = won(afterCash);
+  $("tradeModal").classList.remove("show");
+  $("confirmModal").classList.add("show");
+};
+$("cancelConfirm").onclick = () => {
+  $("confirmModal").classList.remove("show");
+  $("tradeModal").classList.add("show");
+};
 
 $("confirmTrade").onclick = async () => {
   const s = state.currentStock;
@@ -385,7 +535,7 @@ $("confirmTrade").onclick = async () => {
   }
 
   state.user.tradeCount = (state.user.tradeCount || 0) + 1;
-  $("tradeModal").classList.remove("show");
+  $("confirmModal").classList.remove("show");
   await save(false);
   toast("거래 완료");
   openStock(s.id);
@@ -398,13 +548,21 @@ function addHistory(type, name, qty, amount){
     type, name, qty, amount,
     time:new Date().toLocaleString("ko-KR", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})
   });
-  state.user.history = state.user.history.slice(0,10);
+  state.user.history = state.user.history.slice(0,20);
 }
 
 function renderWallet(){
-  $("walletTotal").textContent = won(totalAsset());
+  const total = totalAsset();
+  const profit = totalProfit();
+  const profitRate = (profit / (state.user.startingCash || STARTING_CASH)) * 100;
+
+  $("walletTotal").textContent = won(total);
   $("walletCash").textContent = won(state.user.cash);
   $("walletStocks").textContent = won(stockValue());
+  $("walletProfit").textContent = signWon(profit);
+  $("walletProfit").className = cls(profit);
+  $("walletRate").textContent = rate(profitRate);
+  $("walletRate").className = cls(profitRate);
 
   const held = getAllStockViews().filter(s=>holding(s.id).shares > 0);
   $("holdingCount").textContent = `${held.length}개`;
@@ -417,11 +575,12 @@ function renderWallet(){
     $("holdingList").innerHTML = held.map(s=>{
       const h = holding(s.id);
       const p = (s.price - h.avg) * h.shares;
+      const r = ((s.price - h.avg) / h.avg) * 100;
       return `
         <div class="stock-row" data-stock="${s.id}">
           <div>
             <b>${s.name}</b>
-            <p>${h.shares}주 · 평균 ${won(h.avg)}</p>
+            <p>${h.shares}주 · 평균 ${won(h.avg)} · ${rate(r)}</p>
           </div>
           <strong class="${cls(p)}">${signWon(p)}</strong>
         </div>
@@ -503,15 +662,13 @@ $("refreshBtn").onclick = () => {
 
 setInterval(()=>{
   $("tickTimer").textContent = getNextTickText();
-  $("detailTimer").textContent = getNextTickText();
-  // 상세 화면에서만 차트/가격 갱신. 다른 화면을 상세로 강제 이동시키지 않음.
   if(state.screen === "detailScreen" && state.currentStock){
     const id = state.currentStock.id;
-    const s = getAllStockViews().find(x=>x.id===id);
-    state.currentStock = s;
-    $("detailPrice").textContent = won(s.price);
-    $("detailChange").textContent = `${s.change >= 0 ? "▲" : "▼"} ${Math.abs(s.change).toFixed(2)}%`;
-    $("detailChange").className = s.change >= 0 ? "up" : "down";
-    drawChart(s.chart);
+    const base = STOCKS.find(x=>x.id===id);
+    state.currentStock = getStockView(base, state.chartRange);
+    $("detailPrice").textContent = won(state.currentStock.price);
+    $("detailChange").textContent = `${state.currentStock.change >= 0 ? "▲" : "▼"} ${Math.abs(state.currentStock.change).toFixed(2)}%`;
+    $("detailChange").className = state.currentStock.change >= 0 ? "up" : "down";
+    drawChart(state.currentStock.chart);
   }
 }, 1000);

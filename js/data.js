@@ -1,5 +1,5 @@
 export const STOCKS = [
-  {id:"hansung", name:"한성전자", start:95000, min:20000, max:5000000, vol:5},
+  {id:"hansung", name:"한성전자", start:95000, min:20000, max:5000000, vol:1},
   {id:"miraeEnergy", name:"미래에너지", start:3200, min:300, max:35000, vol:2},
   {id:"taesung", name:"태성자동차", start:680000, min:100000, max:2000000, vol:3},
   {id:"cheongun", name:"청운제약", start:450, min:50, max:120000, vol:5},
