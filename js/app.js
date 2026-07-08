@@ -58,10 +58,13 @@ const state = {
   currentChartValues:[],
   tradeType:"buy",
   qty:1,
-  sort:"name"
+  sort:"name",
+  tradeSubmitting:false,
+  authSubmitting:false
 };
 
 let tradeAlertTimer = null;
+let saveQueue = Promise.resolve();
 
 const titles = {
   homeScreen:"홈",
@@ -72,9 +75,9 @@ const titles = {
   profileScreen:"프로필"
 };
 
-function won(v){ return Math.round(v).toLocaleString("ko-KR") + " 원"; }
+function won(v){ return Math.round(finiteNumber(v, 0)).toLocaleString("ko-KR") + " 원"; }
 function signWon(v){ return (v > 0 ? "+" : "") + won(v); }
-function rate(v){ return (v > 0 ? "+" : "") + v.toFixed(2) + "%"; }
+function rate(v){ return (v > 0 ? "+" : "") + finiteNumber(v, 0).toFixed(2) + "%"; }
 function cls(v){ return v > 0 ? "up" : v < 0 ? "down" : "flat"; }
 
 function toast(msg){
@@ -117,16 +120,66 @@ function loading(show){
   $("loadingOverlay").classList.toggle("hidden", !show);
 }
 
+function finiteNumber(value, fallback=0){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeQty(value){
+  return Math.max(1, Math.floor(finiteNumber(value, 1)));
+}
+
+function normalizeHoldings(holdings){
+  const clean = {};
+  Object.entries(holdings || {}).forEach(([id, h]) => {
+    const shares = Math.floor(finiteNumber(h?.shares, 0));
+    const avg = finiteNumber(h?.avg, 0);
+    if(shares > 0 && avg >= 0){
+      clean[id] = {shares, avg};
+    }
+  });
+  return clean;
+}
+
+function normalizeUser(raw={}, fallbackName="투자자"){
+  const user = {
+    nickname: fallbackName,
+    startingCash:STARTING_CASH,
+    cash:STARTING_CASH,
+    holdings:{},
+    favorites:[],
+    tradeCount:0,
+    history:[],
+    totalAsset:STARTING_CASH,
+    ...raw
+  };
+
+  user.startingCash = finiteNumber(user.startingCash, STARTING_CASH);
+  user.cash = finiteNumber(user.cash, STARTING_CASH);
+  user.holdings = normalizeHoldings(user.holdings);
+  user.favorites = Array.isArray(user.favorites) ? user.favorites : [];
+  user.history = Array.isArray(user.history) ? user.history.slice(0,20) : [];
+  user.tradeCount = Math.max(0, Math.floor(finiteNumber(user.tradeCount, 0)));
+  user.totalAsset = finiteNumber(user.totalAsset, user.cash);
+  user.nickname = user.nickname || fallbackName;
+  return user;
+}
+
 function holding(id){
-  return state.user.holdings?.[id] || {shares:0, avg:0};
+  const h = state.user.holdings?.[id] || {};
+  return {
+    shares:Math.max(0, Math.floor(finiteNumber(h.shares, 0))),
+    avg:finiteNumber(h.avg, 0)
+  };
 }
 
 function stockValue(){
-  return getAllStockViews().reduce((sum,s)=>sum + holding(s.id).shares * s.price, 0);
+  const value = getAllStockViews().reduce((sum,s)=>sum + holding(s.id).shares * s.price, 0);
+  return finiteNumber(value, 0);
 }
 
 function totalAsset(){
-  return state.user.cash + stockValue();
+  return finiteNumber(state.user.cash, 0) + stockValue();
 }
 
 function totalProfit(){
@@ -138,15 +191,21 @@ async function save(refreshRank=false, updateRankAfterSave=true){
 
   const currentTotal = totalAsset();
   state.user.totalAsset = currentTotal;
+  state.user = normalizeUser(state.user, state.user.loginName || state.user.nickname || "투자자");
 
-  await setDoc(doc(db, "users", state.uid), {
+  const payload = {
     ...state.user,
     totalAsset: currentTotal,
     updatedAt: serverTimestamp()
-  }, { merge:true });
+  };
+
+  saveQueue = saveQueue
+    .catch(() => {})
+    .then(() => setDoc(doc(db, "users", state.uid), payload, { merge:true }));
+  await saveQueue;
 
   if(updateRankAfterSave && (refreshRank || state.screen === "rankScreen")){
-    await renderRank();
+    await renderRank(false);
   }
 }
 
@@ -185,6 +244,7 @@ $("showLogin").onclick = () => {
 };
 
 $("signupBtn").onclick = async () => {
+  if(state.authSubmitting) return;
   setAuthError("");
   const loginName = $("signupName").value.trim();
   const password = $("signupPassword").value.trim();
@@ -197,12 +257,14 @@ $("signupBtn").onclick = async () => {
   }
 
   try{
+    state.authSubmitting = true;
+    $("signupBtn").disabled = true;
     loading(true);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
 
     state.uid = cred.user.uid;
     state.email = email;
-    state.user = {
+    state.user = normalizeUser({
       nickname: loginName,
       loginName,
       email,
@@ -215,7 +277,7 @@ $("signupBtn").onclick = async () => {
       totalAsset:STARTING_CASH,
       createdAt:new Date().toISOString(),
       updatedAt:serverTimestamp()
-    };
+    }, loginName);
 
     await setDoc(doc(db, "users", cred.user.uid), state.user, { merge:true });
     renderAll();
@@ -227,11 +289,14 @@ $("signupBtn").onclick = async () => {
     setAuthError(msg);
     toast(msg);
   }finally{
+    state.authSubmitting = false;
+    $("signupBtn").disabled = false;
     loading(false);
   }
 };
 
 $("loginBtn").onclick = async () => {
+  if(state.authSubmitting) return;
   setAuthError("");
   const loginName = $("loginName").value.trim();
   const password = $("loginPassword").value.trim();
@@ -244,6 +309,8 @@ $("loginBtn").onclick = async () => {
   }
 
   try{
+    state.authSubmitting = true;
+    $("loginBtn").disabled = true;
     loading(true);
     const cred = await signInWithEmailAndPassword(auth, email, password);
 
@@ -254,9 +321,9 @@ $("loginBtn").onclick = async () => {
     const snap = await getDoc(ref);
 
     if(snap.exists()){
-      state.user = {...state.user, ...snap.data()};
+      state.user = normalizeUser({...state.user, ...snap.data()}, loginName);
     }else{
-      state.user = {
+      state.user = normalizeUser({
         nickname: loginName,
         loginName,
         email,
@@ -269,14 +336,10 @@ $("loginBtn").onclick = async () => {
         totalAsset:STARTING_CASH,
         createdAt:new Date().toISOString(),
         updatedAt:serverTimestamp()
-      };
+      }, loginName);
       await setDoc(ref, state.user, { merge:true });
     }
 
-    if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
-    if(!state.user.history) state.user.history = [];
-    if(!state.user.favorites) state.user.favorites = [];
-    if(!state.user.holdings) state.user.holdings = {};
     if(!state.user.loginName) state.user.loginName = loginName;
     if(!state.user.nickname || state.user.nickname === "투자자") state.user.nickname = loginName;
 
@@ -291,6 +354,8 @@ $("loginBtn").onclick = async () => {
     setAuthError(msg);
     toast(msg);
   }finally{
+    state.authSubmitting = false;
+    $("loginBtn").disabled = false;
     loading(false);
   }
 };
@@ -307,6 +372,7 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
+  if(state.authSubmitting) return;
   if(state.screen !== "authScreen") return;
 
   try{
@@ -318,11 +384,7 @@ onAuthStateChanged(auth, async (user) => {
     const snap = await getDoc(ref);
 
     if(snap.exists()){
-      state.user = {...state.user, ...snap.data()};
-      if(!state.user.startingCash) state.user.startingCash = STARTING_CASH;
-      if(!state.user.history) state.user.history = [];
-      if(!state.user.favorites) state.user.favorites = [];
-      if(!state.user.holdings) state.user.holdings = {};
+      state.user = normalizeUser({...state.user, ...snap.data()}, snap.data()?.loginName || "투자자");
       renderAll();
       show("homeScreen");
     }
@@ -601,13 +663,13 @@ function updateModal(){
   if(isBuy && !ok) warning = `${won(amount - state.user.cash)} 부족합니다.`;
   if(!isBuy && !ok) warning = `${state.qty - h.shares}주를 초과하여 판매할 수 없습니다.`;
   $("tradeWarning").textContent = warning;
-  $("openConfirm").disabled = !ok;
+  $("openConfirm").disabled = state.tradeSubmitting || !ok;
 }
 
 $("qtyMinus").onclick = () => { state.qty = Math.max(1, state.qty-1); updateModal(); };
 $("qtyPlus").onclick = () => { state.qty += 1; updateModal(); };
 $("qtyInput").oninput = () => {
-  state.qty = Math.max(1, parseInt($("qtyInput").value || "1", 10));
+  state.qty = normalizeQty($("qtyInput").value);
   updateModal();
 };
 $("maxBtn").onclick = () => {
@@ -623,7 +685,9 @@ $("maxBtn").onclick = () => {
 $("closeModal").onclick = () => $("tradeModal").classList.remove("show");
 
 $("openConfirm").onclick = () => {
+  if(state.tradeSubmitting) return;
   const s = state.currentStock;
+  state.qty = normalizeQty(state.qty);
   const amount = s.price * state.qty;
   const afterCash = state.tradeType === "buy" ? state.user.cash - amount : state.user.cash + amount;
   $("confirmTitle").textContent = state.tradeType === "buy" ? "매수 확인" : "매도 확인";
@@ -631,44 +695,63 @@ $("openConfirm").onclick = () => {
   $("confirmQty").textContent = `${state.qty}주`;
   $("confirmAmount").textContent = won(amount);
   $("confirmAfterCash").textContent = won(afterCash);
+  $("confirmTrade").disabled = false;
+  $("cancelConfirm").disabled = false;
   $("tradeModal").classList.remove("show");
   $("confirmModal").classList.add("show");
 };
 $("cancelConfirm").onclick = () => {
+  if(state.tradeSubmitting) return;
   $("confirmModal").classList.remove("show");
   $("tradeModal").classList.add("show");
 };
 
 $("confirmTrade").onclick = async () => {
+  if(state.tradeSubmitting) return;
+  state.tradeSubmitting = true;
+  $("confirmTrade").disabled = true;
+  $("cancelConfirm").disabled = true;
+
   const s = state.currentStock;
   const price = s.price;
-  const amount = price * state.qty;
+  const qty = normalizeQty(state.qty);
+  const amount = price * qty;
   const h = holding(s.id);
   const tradeLabel = state.tradeType === "buy" ? "매수" : "매도";
 
-  if(state.tradeType === "buy"){
-    if(state.user.cash < amount) return toast("보유 현금이 부족합니다.");
-    const newShares = h.shares + state.qty;
-    const newAvg = ((h.avg*h.shares) + amount) / newShares;
-    state.user.cash -= amount;
-    state.user.holdings[s.id] = {shares:newShares, avg:newAvg};
-    addHistory(tradeLabel, s.name, state.qty, amount);
-  }else{
-    if(h.shares < state.qty) return toast("보유 수량이 부족합니다.");
-    state.user.cash += amount;
-    const remain = h.shares - state.qty;
-    if(remain <= 0) delete state.user.holdings[s.id];
-    else state.user.holdings[s.id] = {shares:remain, avg:h.avg};
-    addHistory(tradeLabel, s.name, state.qty, amount);
-  }
+  try{
+    if(state.tradeType === "buy"){
+      if(state.user.cash < amount) return toast("보유 현금이 부족합니다.");
+      const newShares = h.shares + qty;
+      const newAvg = ((h.avg*h.shares) + amount) / newShares;
+      state.user.cash -= amount;
+      state.user.holdings[s.id] = {shares:newShares, avg:newAvg};
+      addHistory(tradeLabel, s.name, qty, amount);
+    }else{
+      if(h.shares < qty) return toast("보유 수량이 부족합니다.");
+      state.user.cash += amount;
+      const remain = h.shares - qty;
+      if(remain <= 0) delete state.user.holdings[s.id];
+      else state.user.holdings[s.id] = {shares:remain, avg:h.avg};
+      addHistory(tradeLabel, s.name, qty, amount);
+    }
 
-  state.user.tradeCount = (state.user.tradeCount || 0) + 1;
-  $("confirmModal").classList.remove("show");
-  await save(true);
-  showTradeAlert(tradeLabel, s.name, state.qty, price, amount);
-  toast(`${tradeLabel} 완료`);
-  openStock(s.id);
-  renderAll();
+    state.user.tradeCount = (state.user.tradeCount || 0) + 1;
+    $("confirmModal").classList.remove("show");
+    await save(true);
+    showTradeAlert(tradeLabel, s.name, qty, price, amount);
+    toast(`${tradeLabel} 완료`);
+    openStock(s.id);
+    renderAll();
+  }catch(e){
+    console.error(e);
+    toast("거래 저장 중 오류가 발생했습니다.");
+  }finally{
+    state.tradeSubmitting = false;
+    $("confirmTrade").disabled = false;
+    $("cancelConfirm").disabled = false;
+    updateModal();
+  }
 };
 
 function addHistory(type, name, qty, amount){
@@ -736,9 +819,9 @@ function renderWallet(){
   }
 }
 
-async function renderRank(){
+async function renderRank(syncCurrentUser=true){
   try{
-    if(state.uid){
+    if(syncCurrentUser && state.uid){
       await save(false, false);
     }
 
