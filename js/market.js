@@ -113,11 +113,11 @@ function calculateNextPrice(stock, targetBucket, previousPrice){
 
   // 최대가 근처: 상승 약화 / 하락 강화
   // 최저가 근처: 하락 약화 / 상승 강화
-  const wallBias = -position * (0.0022 + stock.vol * 0.00055);
+  const wallBias = -position * (0.0035 + stock.vol * 0.0008);
 
   // 종목별 변동성만 다르게 적용
-  const noise = (random(hash(stock.id) + targetBucket * 139) - 0.5) * (0.006 + stock.vol * 0.0042);
-  const wave = Math.sin((targetBucket + hash(stock.name) % 977) / (10 + stock.vol)) * (0.0009 * stock.vol);
+  const noise = (random(hash(stock.id) + targetBucket * 139) - 0.5) * (0.02 * stock.vol);
+  const wave = Math.sin((targetBucket + hash(stock.name) % 977) / (8 + stock.vol)) * (0.002 * stock.vol);
 
   let next = previousPrice * (1 + wallBias + noise + wave);
 

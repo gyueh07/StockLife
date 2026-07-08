@@ -187,6 +187,15 @@ function stockValue(){
   return stockValueForHoldings(state.user.holdings);
 }
 
+function stockCostBasis(){
+  const value = Object.values(state.user.holdings || {}).reduce((sum, h) => {
+    const shares = Math.max(0, Math.floor(finiteNumber(h?.shares, 0)));
+    const avg = finiteNumber(h?.avg, 0);
+    return sum + shares * avg;
+  }, 0);
+  return finiteNumber(value, 0);
+}
+
 function totalAsset(){
   return finiteNumber(state.user.cash, 0) + stockValue();
 }
@@ -826,12 +835,14 @@ function addHistory(type, name, qty, amount){
 
 function renderWallet(){
   const total = totalAsset();
-  const profit = totalProfit();
-  const profitRate = (profit / (state.user.startingCash || STARTING_CASH)) * 100;
+  const sv = stockValue();
+  const costBasis = stockCostBasis();
+  const profit = sv - costBasis;
+  const profitRate = costBasis > 0 ? (profit / costBasis) * 100 : 0;
 
   $("walletTotal").textContent = won(total);
   $("walletCash").textContent = won(state.user.cash);
-  $("walletStocks").textContent = won(stockValue());
+  $("walletStocks").textContent = won(sv);
   $("walletProfit").textContent = signWon(profit);
   $("walletProfit").className = cls(profit);
   $("walletRate").textContent = rate(profitRate);
